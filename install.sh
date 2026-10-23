@@ -333,6 +333,7 @@ do_install() {
     echo "      sing-box run -c /etc/sing-box/config.json   # вручную"
     echo "      sing-box version                            # версия"
     echo "      systemctl start|stop|restart|status sing-box"
+    hash_hint
 }
 
 do_update() {
@@ -410,6 +411,7 @@ do_uninstall() {
        [[ "$(dpkg-query -W -f='${Status}' sing-box 2>/dev/null || true)" == *"install ok installed"* ]]; then
         note "Оригинальный sing-box (apt) по-прежнему установлен — команда sing-box снова будет его"
     fi
+    hash_hint
 }
 
 do_status() {
@@ -420,6 +422,12 @@ do_status() {
         note "Бинарник не установлен"
     fi
     systemctl --no-pager status sing-box.service || true
+}
+
+# ---------------------------------------------------------------- подсказка про hash
+hash_hint() {
+    note "Подсказка: если в текущей сессии команда sing-box не находится или ведёт"
+    note "на старый путь (например, /usr/bin/sing-box) — выполните: hash -r"
 }
 
 # ---------------------------------------------------------------- меню
