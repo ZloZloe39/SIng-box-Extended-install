@@ -20,6 +20,7 @@ set -euo pipefail
 REPO="shtorm-7/sing-box-extended"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 FALLBACK_TAG="v1.14.3-extended-2.7.3"   # запасной тег, если GitHub API недоступен
+RAW_URL="https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh"
 
 BIN_DIR="/usr/local/bin"
 BIN_PATH="${BIN_DIR}/sing-box"
@@ -35,7 +36,9 @@ fail()  { echo -e "${RED}[-][${NC}] $*" >&2; exit 1; }
 # ---------------------------------------------------------------- проверки
 need_root() {
     if [[ ${EUID} -ne 0 ]]; then
-        fail "Запустите с правами root: sudo $0 $*"
+        echo -e "${RED}[-][${NC}] Нужны права root. Запустите, например:" >&2
+        echo -e "      sudo bash <(curl -Ls ${RAW_URL}) $*" >&2
+        exit 1
     fi
 }
 
@@ -272,7 +275,16 @@ case "${cmd}" in
     uninstall) need_root; do_uninstall ;;
     status)    do_status ;;
     -h|--help|help)
-        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+        cat <<'HELP'
+Использование: install.sh [install|update|uninstall|status]
+  install    — скачать последнюю версию и установить (по умолчанию)
+  update     — обновить до последней версии и перезапустить сервис
+  uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
+  status     — показать статус сервиса и версию
+
+Быстрая установка одной командой:
+  sudo bash <(curl -Ls https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh)
+HELP
         ;;
     *) fail "Неизвестная команда: ${cmd} (install|update|uninstall|status)" ;;
 esac

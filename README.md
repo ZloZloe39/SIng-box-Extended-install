@@ -21,8 +21,17 @@ systemctl start|stop|restart|status sing-box  # через systemd
 
 ## Установка
 
+Одной командой (Debian/Ubuntu/RHEL/Arch/... — нужен systemd и curl):
+
 ```bash
-# Debian/Ubuntu/RHEL/Arch/... (нужен systemd, curl или wget)
+sudo bash <(curl -Ls https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh)
+```
+
+Или скачав скрипт:
+
+```bash
+git clone https://github.com/ZloZloe39/SIng-box-Extended-install.git
+cd SIng-box-Extended-install
 sudo bash install.sh              # установка последней версии
 sudo bash install.sh update       # обновление до последней версии
 sudo bash install.sh status       # статус сервиса и версия
@@ -37,11 +46,3 @@ sudo bash install.sh uninstall    # удаление (конфиг в /etc/sing-
 | `/etc/sing-box/config.json` | конфигурация (замените на свою) |
 | `/etc/systemd/system/sing-box.service` | systemd-юнит |
 
-## Публикация этого репозитория в GitHub
-
-```bash
-# нужен токен с правом repo (Settings → Developer settings → Personal access tokens)
-GITHUB_TOKEN=ghp_xxx bash push-to-github.sh
-```
-
-Скрипт создаст репозиторий `Sing-box-Extended install` и запушит содержимое.
