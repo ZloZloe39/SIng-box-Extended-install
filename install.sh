@@ -147,16 +147,16 @@ install_binary() {
     info "Скачиваю: ${url}"
 
     tmp="$(mktemp -d /tmp/sing-box-ext.XXXXXX)"
-    trap 'rm -rf "${tmp}"' RETURN
 
-    download "${url}" "${tmp}/${file}"
-    tar -xzf "${tmp}/${file}" -C "${tmp}"
+    download "${url}" "${tmp}/${file}" || { rm -rf "${tmp}"; fail "Не удалось скачать: ${url}"; }
+    tar -xzf "${tmp}/${file}" -C "${tmp}" || { rm -rf "${tmp}"; fail "Не удалось распаковать архив"; }
 
     # ищем исполняемый файл sing-box в архиве (обычно лежит в корне)
     bin="$(find "${tmp}" -maxdepth 2 -type f -name 'sing-box' | head -n1)"
-    [[ -n "${bin}" ]] || fail "В архиве не найден бинарник sing-box"
+    [[ -n "${bin}" ]] || { rm -rf "${tmp}"; fail "В архиве не найден бинарник sing-box"; }
 
     install -m 0755 "${bin}" "${BIN_PATH}"
+    rm -rf "${tmp}"
     info "Установлено: ${BIN_PATH}"
 
     # проверка запускаемости (glibc/musl, архитектура)
