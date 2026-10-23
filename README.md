@@ -45,8 +45,25 @@ cd SIng-box-Extended-install
 sudo bash install.sh              # установка последней версии
 sudo bash install.sh update       # обновление до последней версии
 sudo bash install.sh status       # статус сервиса и версия
-sudo bash install.sh uninstall    # удаление (конфиг в /etc/sing-box сохраняется)
+sudo bash install.sh uninstall    # удаление; спросит, удалять ли конфиг подчистую
 ```
+
+## Удаление
+
+`uninstall` останавливает и отключает сервис, удаляет бинарник `/usr/local/bin/sing-box`, systemd-юнит и `/etc/sing-box/version`, затем спрашивает:
+
+- **удалить всё подчистую** — вместе с конфигом и данными в `/etc/sing-box`;
+- **оставить конфиг** — стандартное удаление, `/etc/sing-box` на месте.
+
+Если рядом стоит оригинальный sing-box из apt, скрипт предупредит: он тоже использует `/etc/sing-box`, и полное удаление затронет и его конфиг.
+
+Без вопроса (для неинтерактивного запуска):
+
+```bash
+sudo bash install.sh uninstall --purge        # удалить всё подчистую, включая /etc/sing-box
+sudo bash install.sh uninstall --keep-config  # удалить только бинарник и юнит, конфиг оставить
+```
+
 
 ## Файлы, которые создаются
 

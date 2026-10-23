@@ -4,17 +4,24 @@
 # Репозиторий: https://github.com/shtorm-7/sing-box-extended
 #
 # Использование:
-#   sudo ./install.sh [install|update|uninstall|status] [--remove-apt|--keep-apt]
+#   sudo ./install.sh [install|update|uninstall|status]
+#                     [--remove-apt|--keep-apt]  (для install)
+#                     [--purge|--keep-config]    (для uninstall)
 #     install    — установка последней версии (по умолчанию);
 #                  при повторном запуске проверяет наличие нового релиза
 #                  и обновляет, если он есть
 #     update     — обновить до последней версии и перезапустить сервис
-#     uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
+#     uninstall  — удалить бинарник и systemd-юнит; спросит, удалять ли
+#                  также конфиг и данные в /etc/sing-box (подчистую)
 #     status     — показать статус сервиса и версию
 #
-# Флаги (если оригинальный sing-box установлен через apt):
+# Флаги install (если оригинальный sing-box установлен через apt):
 #   --remove-apt — не спрашивать: удалить apt-пакет и установить Extended
 #   --keep-apt   — не спрашивать: ничего не трогать, Extended не ставить
+#
+# Флаги uninstall:
+#   --purge       — не спрашивать: удалить всё подчистую (включая /etc/sing-box)
+#   --keep-config — не спрашивать: оставить конфиг и данные в /etc/sing-box
 #
 # После установки команда `sing-box` доступна как в оригинале:
 #   sing-box run -c /path/to/config.json
@@ -345,14 +352,55 @@ do_update() {
     fi
 }
 
+# ---------------------------------------------------------------- удаление
 do_uninstall() {
     check_systemd
+    local purge="${PURGE_ANSWER:-}"
+
+    # вопрос: удалить подчистую (вместе с /etc/sing-box) или оставить конфиг
+    if [[ -e "${CONFIG_DIR}" && -z "${purge}" ]]; then
+        if [[ -r /dev/tty && -w /dev/tty ]]; then
+            echo
+            note "Обнаружены данные sing-box-extended: ${CONFIG_DIR}"
+            # если рядом стоит apt-версия — у неё тот же каталог конфига
+            if have dpkg-query && \
+               [[ "$(dpkg-query -W -f='${Status}' sing-box 2>/dev/null || true)" == *"install ok installed"* ]]; then
+                note "Внимание: на системе установлен оригинальный sing-box (apt) —"
+                note "он тоже использует ${CONFIG_DIR}. Полное удаление затронет и его конфиг."
+            fi
+            echo "  [y] Удалить всё подчистую, включая конфиг и данные (${CONFIG_DIR})"
+            echo "  [n] Оставить конфиг (стандартное удаление)"
+            printf "Удалять также ${CONFIG_DIR}? [y/N]: "
+            read -r purge < /dev/tty || fail "Не удалось прочитать ответ с терминала"
+        else
+            note "Нет интерактивного терминала — удаляю стандартно, ${CONFIG_DIR} сохраню."
+            note "Для полного удаления подчистую: $0 uninstall --purge"
+        fi
+    elif [[ -e "${CONFIG_DIR}" && -n "${purge}" ]]; then
+        note "Ответ взят из флага: ${purge}"
+    fi
+
     systemctl disable --now sing-box.service 2>/dev/null || true
     rm -f "${UNIT_PATH}" "${VERSION_FILE}"
     systemctl daemon-reload
     rm -f "${BIN_PATH}"
-    note "Удалены: ${BIN_PATH}, ${UNIT_PATH}, ${VERSION_FILE}"
-    note "Конфиг сохранён в ${CONFIG_DIR} (удалите вручную, если не нужен)"
+    info "Удалены: ${BIN_PATH}, ${UNIT_PATH}, ${VERSION_FILE}"
+
+    case "${purge}" in
+        [yY]*)
+            rm -rf "${CONFIG_DIR}"
+            info "Удалено подчистую, включая ${CONFIG_DIR}"
+            ;;
+        *)
+            note "Конфиг и данные сохранены в ${CONFIG_DIR} (удалите вручную: rm -rf ${CONFIG_DIR})"
+            ;;
+    esac
+
+    # подсказка, если оригинальный sing-box всё ещё на месте
+    if have dpkg-query && \
+       [[ "$(dpkg-query -W -f='${Status}' sing-box 2>/dev/null || true)" == *"install ok installed"* ]]; then
+        note "Оригинальный sing-box (apt) по-прежнему установлен — команда sing-box снова будет его"
+    fi
 }
 
 do_status() {
@@ -368,10 +416,13 @@ do_status() {
 # ---------------------------------------------------------------- main
 cmd=""
 APT_ANSWER=""
+PURGE_ANSWER=""
 for a in "$@"; do
     case "${a}" in
-        --remove-apt) APT_ANSWER="y" ;;
-        --keep-apt)   APT_ANSWER="n" ;;
+        --remove-apt)  APT_ANSWER="y" ;;
+        --keep-apt)    APT_ANSWER="n" ;;
+        --purge)       PURGE_ANSWER="y" ;;
+        --keep-config) PURGE_ANSWER="n" ;;
         -h|--help|help) cmd="help" ;;
         *)
             if [[ -z "${cmd}" ]]; then cmd="${a}"; else fail "Неизвестный аргумент: ${a}"; fi
@@ -387,15 +438,22 @@ case "${cmd}" in
     status)    do_status ;;
     -h|--help|help)
         cat <<'HELP'
-Использование: install.sh [install|update|uninstall|status] [--remove-apt|--keep-apt]
+Использование: install.sh [install|update|uninstall|status]
+                [--remove-apt|--keep-apt]   (для install)
+                [--purge|--keep-config]     (для uninstall)
   install    — скачать последнюю версию и установить (по умолчанию)
   update     — обновить до последней версии и перезапустить сервис
-  uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
+  uninstall  — удалить бинарник и systemd-юнит; спросит, удалять ли также
+               конфиг и данные в /etc/sing-box (подчистую)
   status     — показать статус сервиса и версию
 
-Флаги (если оригинальный sing-box установлен через apt):
+Флаги install (если оригинальный sing-box установлен через apt):
   --remove-apt   не спрашивать: удалить apt-пакет и установить Extended
   --keep-apt     не спрашивать: ничего не трогать, Extended не ставить
+
+Флаги uninstall:
+  --purge        не спрашивать: удалить всё подчистую (включая /etc/sing-box)
+  --keep-config  не спрашивать: оставить конфиг и данные в /etc/sing-box
 
 Быстрая установка одной командой:
   sudo bash <(curl -Ls https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh)
