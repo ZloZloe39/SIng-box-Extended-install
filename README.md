@@ -37,12 +37,25 @@ sudo bash install.sh --keep-apt     # без вопроса: ничего не �
 sudo bash <(curl -Ls https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh)
 ```
 
+Запуск без аргументов в интерактивном терминале показывает меню:
+
+```
+======================================
+   sing-box-extended (SFA) — установщик
+======================================
+  [1] Установить / обновить до последней версии
+  [2] Удалить
+  [q] Выйти
+```
+
+Выбор `[2]` запускает удаление и спрашивает, сохранять ли конфиг в `/etc/sing-box`. Без терминала (например, из cron) по умолчанию выполняется установка.
+
 Или скачав скрипт:
 
 ```bash
 git clone https://github.com/ZloZloe39/SIng-box-Extended-install.git
 cd SIng-box-Extended-install
-sudo bash install.sh              # установка последней версии
+sudo bash install.sh              # меню: установить/обновить, удалить
 sudo bash install.sh update       # обновление до последней версии
 sudo bash install.sh status       # статус сервиса и версия
 sudo bash install.sh uninstall    # удаление; спросит, удалять ли конфиг подчистую
