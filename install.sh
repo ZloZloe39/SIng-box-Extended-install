@@ -2,6 +2,7 @@
 #
 # install.sh — установка sing-box-extended (SFA) в Linux c systemd
 # Репозиторий: https://github.com/shtorm-7/sing-box-extended
+# Лицензия: MIT (см. LICENSE в этом репозитории)
 #
 # Использование:
 #   sudo ./install.sh [install|update|uninstall|status]

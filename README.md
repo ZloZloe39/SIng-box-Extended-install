@@ -74,3 +74,7 @@ sudo bash install.sh uninstall --keep-config  # удалить только би
 | `/etc/sing-box/version` | тег установленного релиза (для авто-обновления) |
 | `/etc/systemd/system/sing-box.service` | systemd-юнит |
 
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE).
+
