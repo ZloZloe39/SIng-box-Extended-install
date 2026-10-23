@@ -138,7 +138,8 @@ ensure_running() {
 install_binary() {
     local tag="$1" arch="$2" variant="" file tmp bin
     is_musl && variant="-musl"
-    file="sing-box-${tag}-linux-${arch}${variant}.tar.gz"
+    # в ассетах этого форка версия без префикса v: sing-box-1.14.3-extended-...-linux-amd64.tar.gz
+    file="sing-box-${tag#v}-linux-${arch}${variant}.tar.gz"
     local url="https://github.com/${REPO}/releases/download/${tag}/${file}"
 
     info "Версия : ${tag}"
