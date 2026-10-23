@@ -4,13 +4,17 @@
 # Репозиторий: https://github.com/shtorm-7/sing-box-extended
 #
 # Использование:
-#   sudo ./install.sh [install|update|uninstall|status]
+#   sudo ./install.sh [install|update|uninstall|status] [--remove-apt|--keep-apt]
 #     install    — установка последней версии (по умолчанию);
 #                  при повторном запуске проверяет наличие нового релиза
 #                  и обновляет, если он есть
 #     update     — обновить до последней версии и перезапустить сервис
 #     uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
 #     status     — показать статус сервиса и версию
+#
+# Флаги (если оригинальный sing-box установлен через apt):
+#   --remove-apt — не спрашивать: удалить apt-пакет и установить Extended
+#   --keep-apt   — не спрашивать: ничего не трогать, Extended не ставить
 #
 # После установки команда `sing-box` доступна как в оригинале:
 #   sing-box run -c /path/to/config.json
@@ -237,9 +241,50 @@ EOF
     systemctl daemon-reload
 }
 
+# ---------------------------------------------------------------- apt-пакет (оригинальный sing-box)
+handle_apt_package() {
+    # Если оригинальный sing-box стоит как apt-пакет — спрашиваем, удалять ли его.
+    # Конфиг /etc/sing-box в обоих случаях сохраняется:
+    #   - apt-get remove (не purge!) не трогает /etc;
+    #   - скрипт существующий config.json никогда не перезаписывает.
+    have dpkg-query || return 0
+    local status ans="${APT_ANSWER:-}"
+    status="$(dpkg-query -W -f='${Status}' sing-box 2>/dev/null || true)"
+    [[ "${status}" == *"install ok installed"* ]] || return 0
+
+    echo
+    note "Обнаружен оригинальный sing-box, установленный через apt (пакет 'sing-box')."
+    if [[ -z "${ans}" ]]; then
+        # читаем строго с /dev/tty: при запуске bash <(curl ...) stdin занят самим скриптом
+        [[ -r /dev/tty && -w /dev/tty ]] || fail \
+            "Нечем задать вопрос (нет интерактивного терминала). Повторите с флагом --remove-apt (удалить apt-версию) или --keep-apt (не трогать)."
+        echo "  [y] Удалить apt-версию и установить sing-box-extended"
+        echo "  [n] Ничего не трогать (Extended не будет установлен)"
+        echo "Конфиг ${CONFIG_FILE} сохранится в любом случае."
+        printf "Ваш выбор: "
+        read -r ans < /dev/tty || fail "Не удалось прочитать ответ с терминала"
+    else
+        note "Ответ взят из флага: ${ans}"
+    fi
+
+    case "${ans}" in
+        [yY]*)
+            have apt-get || fail "Найден dpkg, но нет apt-get для удаления пакета"
+            info "Удаляю apt-пакет 'sing-box' (конфиг в ${CONFIG_DIR} сохраню)..."
+            DEBIAN_FRONTEND=noninteractive apt-get remove -y sing-box \
+                || fail "Не удалось удалить apt-пакет 'sing-box'"
+            ;;
+        *)
+            note "Хорошо, установленную версию не трогаю. Extended не будет установлен."
+            exit 0
+            ;;
+    esac
+}
+
 # ---------------------------------------------------------------- действия
 do_install() {
     check_systemd
+    handle_apt_package
     local tag arch installed
     tag="$(get_latest_tag)"
     arch="$(detect_arch)"
@@ -321,7 +366,20 @@ do_status() {
 }
 
 # ---------------------------------------------------------------- main
-cmd="${1:-install}"
+cmd=""
+APT_ANSWER=""
+for a in "$@"; do
+    case "${a}" in
+        --remove-apt) APT_ANSWER="y" ;;
+        --keep-apt)   APT_ANSWER="n" ;;
+        -h|--help|help) cmd="help" ;;
+        *)
+            if [[ -z "${cmd}" ]]; then cmd="${a}"; else fail "Неизвестный аргумент: ${a}"; fi
+            ;;
+    esac
+done
+cmd="${cmd:-install}"
+
 case "${cmd}" in
     install)   need_root; do_install ;;
     update)    need_root; do_update ;;
@@ -329,11 +387,15 @@ case "${cmd}" in
     status)    do_status ;;
     -h|--help|help)
         cat <<'HELP'
-Использование: install.sh [install|update|uninstall|status]
+Использование: install.sh [install|update|uninstall|status] [--remove-apt|--keep-apt]
   install    — скачать последнюю версию и установить (по умолчанию)
   update     — обновить до последней версии и перезапустить сервис
   uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
   status     — показать статус сервиса и версию
+
+Флаги (если оригинальный sing-box установлен через apt):
+  --remove-apt   не спрашивать: удалить apt-пакет и установить Extended
+  --keep-apt     не спрашивать: ничего не трогать, Extended не ставить
 
 Быстрая установка одной командой:
   sudo bash <(curl -Ls https://raw.githubusercontent.com/ZloZloe39/SIng-box-Extended-install/main/install.sh)
