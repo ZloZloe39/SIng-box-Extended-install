@@ -5,7 +5,9 @@
 #
 # Использование:
 #   sudo ./install.sh [install|update|uninstall|status]
-#     install    — скачать последнюю версию и установить (по умолчанию)
+#     install    — установка последней версии (по умолчанию);
+#                  при повторном запуске проверяет наличие нового релиза
+#                  и обновляет, если он есть
 #     update     — обновить до последней версии и перезапустить сервис
 #     uninstall  — удалить бинарник и systemd-юнит (конфиг в /etc/sing-box остаётся)
 #     status     — показать статус сервиса и версию
@@ -26,6 +28,7 @@ BIN_DIR="/usr/local/bin"
 BIN_PATH="${BIN_DIR}/sing-box"
 CONFIG_DIR="/etc/sing-box"
 CONFIG_FILE="${CONFIG_DIR}/config.json"
+VERSION_FILE="${CONFIG_DIR}/version"   # тег последнего установленного релиза
 UNIT_PATH="/etc/systemd/system/sing-box.service"
 
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[0;33m'; NC='\033[0m'
@@ -100,6 +103,35 @@ get_latest_tag() {
         tag="${FALLBACK_TAG}"
     fi
     echo "${tag}"
+}
+
+# ---------------------------------------------------------------- версии
+# version_ge A B -> 0, если A >= B (сравнение тегов вида v1.14.3-extended-2.7.3)
+version_ge() {
+    local a="${1#v}" b="${2#v}"
+    [[ "$(printf '%s\n%s\n' "${b}" "${a}" | sort -rV | head -n1)" == "${a}" ]]
+}
+
+save_version() { # save_version <tag>
+    mkdir -p "${CONFIG_DIR}"
+    echo "$1" > "${VERSION_FILE}"
+}
+
+ensure_running() {
+    if [[ -f "${CONFIG_FILE}" ]] && "${BIN_PATH}" check -c "${CONFIG_FILE}" >/dev/null 2>&1; then
+        if systemctl is-active --quiet sing-box.service; then
+            info "Перезапускаю сервис с новой версией..."
+            systemctl restart sing-box.service
+        else
+            info "Конфиг валиден. Запускаю сервис..."
+            systemctl enable --now sing-box.service
+        fi
+        sleep 1
+        systemctl --no-pager --lines=5 status sing-box.service || true
+    else
+        note "Конфиг ещё не готов (или невалиден) — сервис НЕ запущен."
+        note "После заполнения конфига: systemctl start sing-box"
+    fi
 }
 
 # ---------------------------------------------------------------- установка бинарника
@@ -207,22 +239,32 @@ EOF
 # ---------------------------------------------------------------- действия
 do_install() {
     check_systemd
-    local tag arch
+    local tag arch installed
     tag="$(get_latest_tag)"
     arch="$(detect_arch)"
+
+    # повторный запуск: если стоит новая версия — обновляем, иначе выходим
+    if [[ -x "${BIN_PATH}" && -f "${VERSION_FILE}" ]]; then
+        installed="$(<"${VERSION_FILE}")"
+        if version_ge "${installed}" "${tag}"; then
+            info "Уже установлена последняя версия: ${installed}. Обновлять нечего."
+            if [[ ! -f "${UNIT_PATH}" ]]; then
+                note "Systemd-юнит не найден — доустанавливаю его и конфиг..."
+                install_config
+                install_unit
+            fi
+            return 0
+        fi
+        note "Доступна новая версия: ${installed} -> ${tag}. Обновляю..."
+    elif [[ -x "${BIN_PATH}" ]]; then
+        note "Обнаружена существующая установка: $("${BIN_PATH}" version | head -n1) — ставлю последнюю версию"
+    fi
+
     install_binary "${tag}" "${arch}"
+    save_version "${tag}"
     install_config
     install_unit
-
-    if [[ -f "${CONFIG_FILE}" ]] && "${BIN_PATH}" check -c "${CONFIG_FILE}" >/dev/null 2>&1; then
-        info "Конфиг валиден. Запускаю сервис..."
-        systemctl enable --now sing-box.service
-        sleep 1
-        systemctl --no-pager --lines=5 status sing-box.service || true
-    else
-        note "Конфиг ещё не готов (или невалиден) — сервис НЕ запущен."
-        note "После заполнения конфига: systemctl start sing-box"
-    fi
+    ensure_running
 
     echo
     info "Готово! Команда доступна как в оригинале:"
@@ -233,13 +275,23 @@ do_install() {
 
 do_update() {
     check_systemd
-    have "$BIN_PATH" 2>/dev/null || [[ -x "${BIN_PATH}" ]] || fail "sing-box не установлен, выполните сначала: $0 install"
+    [[ -x "${BIN_PATH}" ]] || fail "sing-box не установлен, выполните сначала: $0 install"
     local tag arch cur
-    cur="$("${BIN_PATH}" version | head -n1)"
     tag="$(get_latest_tag)"
+    if [[ -f "${VERSION_FILE}" ]]; then
+        cur="$(<"${VERSION_FILE}")"
+        if version_ge "${cur}" "${tag}"; then
+            info "Уже установлена последняя версия: ${cur}. Обновлять нечего."
+            return 0
+        fi
+        note "Доступна новая версия: ${cur} -> ${tag}"
+    else
+        cur="$("${BIN_PATH}" version | head -n1)"
+        info "Текущая версия: ${cur}"
+    fi
     arch="$(detect_arch)"
-    info "Текущая версия: ${cur}"
     install_binary "${tag}" "${arch}"
+    save_version "${tag}"
     systemctl daemon-reload
     if systemctl is-active --quiet sing-box.service; then
         info "Перезапускаю сервис..."
@@ -250,10 +302,10 @@ do_update() {
 do_uninstall() {
     check_systemd
     systemctl disable --now sing-box.service 2>/dev/null || true
-    rm -f "${UNIT_PATH}"
+    rm -f "${UNIT_PATH}" "${VERSION_FILE}"
     systemctl daemon-reload
     rm -f "${BIN_PATH}"
-    note "Удалены: ${BIN_PATH}, ${UNIT_PATH}"
+    note "Удалены: ${BIN_PATH}, ${UNIT_PATH}, ${VERSION_FILE}"
     note "Конфиг сохранён в ${CONFIG_DIR} (удалите вручную, если не нужен)"
 }
 

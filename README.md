@@ -17,7 +17,10 @@ systemctl start|stop|restart|status sing-box  # через systemd
 3. Скачивает `sing-box-<tag>-linux-<arch>[-musl].tar.gz` из релизов и ставит бинарник в `/usr/local/bin/sing-box`.
 4. Создаёт стартовый конфиг `/etc/sing-box/config.json` (mixed-инбаунд на 127.0.0.1:2080), если его ещё нет — существующий не затирается.
 5. Устанавливает systemd-юнит `sing-box.service` с правами для TUN/BPF (`CAP_NET_ADMIN`, `CAP_NET_RAW`) и автозапуском.
-6. Проверяет конфиг командой `sing-box check` и при успехе запускает сервис.
+6. Запоминает установленный тег релиза в `/etc/sing-box/version`.
+7. Проверяет конфиг командой `sing-box check` и при успехе запускает сервис.
+
+**Обновление:** повторный запуск скрипта (`install` или `update`) сравнивает установленную версию с последним релизом — если вышел новый, бинарник обновляется, а запущенный сервис перезапускается; если версия уже последняя, скрипт просто сообщит об этом.
 
 ## Установка
 
@@ -44,5 +47,6 @@ sudo bash install.sh uninstall    # удаление (конфиг в /etc/sing-
 |---|---|
 | `/usr/local/bin/sing-box` | бинарник (команда `sing-box`) |
 | `/etc/sing-box/config.json` | конфигурация (замените на свою) |
+| `/etc/sing-box/version` | тег установленного релиза (для авто-обновления) |
 | `/etc/systemd/system/sing-box.service` | systemd-юнит |
 
