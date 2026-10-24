@@ -333,7 +333,7 @@ do_install() {
     echo "      sing-box run -c /etc/sing-box/config.json   # вручную"
     echo "      sing-box version                            # версия"
     echo "      systemctl start|stop|restart|status sing-box"
-    hash_hint
+    reset_hash
 }
 
 do_update() {
@@ -411,7 +411,7 @@ do_uninstall() {
        [[ "$(dpkg-query -W -f='${Status}' sing-box 2>/dev/null || true)" == *"install ok installed"* ]]; then
         note "Оригинальный sing-box (apt) по-прежнему установлен — команда sing-box снова будет его"
     fi
-    hash_hint
+    reset_hash
 }
 
 do_status() {
@@ -424,10 +424,13 @@ do_status() {
     systemctl --no-pager status sing-box.service || true
 }
 
-# ---------------------------------------------------------------- подсказка про hash
-hash_hint() {
-    note "Подсказка: если в текущей сессии команда sing-box не находится или ведёт"
-    note "на старый путь (например, /usr/bin/sing-box) — выполните: hash -r"
+# ---------------------------------------------------------------- hash -r
+reset_hash() {
+    # Чистим кэш путей команд bash, чтобы старая запись (например, на
+    # /usr/bin/sing-box от apt-версии) не мешала после установки/удаления.
+    # Если скрипт запущен как source install.sh — очищается пользовательский терминал;
+    # как отдельный процесс (sudo bash install.sh) — только оболочку самого скрипта.
+    hash -r 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------- меню
