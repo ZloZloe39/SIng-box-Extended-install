@@ -243,9 +243,9 @@ ExecStart=${BIN_PATH} run -c ${CONFIG_FILE}
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=1048576
-# Capabilities required for TUN/BPF (tun inbound, bpf routing)
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_TIME
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+# Capabilities: TUN/BPF (tun inbound, bpf routing) + binding to ports below 1024
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_TIME CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 
 [Install]
