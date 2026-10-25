@@ -229,8 +229,8 @@ EOF
 }
 
 # ---------------------------------------------------------------- systemd-юнит
-install_unit() {
-    cat > "${UNIT_PATH}" <<EOF
+unit_content() {
+    cat <<EOF
 [Unit]
 Description=sing-box extended (SFA) - universal proxy platform
 Documentation=https://github.com/${REPO}
@@ -251,10 +251,42 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+install_unit() {
+    unit_content > "${UNIT_PATH}"
     chmod 0644 "${UNIT_PATH}"
     info "Systemd-юнит: ${UNIT_PATH}"
 
     systemctl daemon-reload
+}
+
+# ---------------------------------------------------------------- ремонт/синхронизация с версией скрипта
+# sync_installation [force_restart]
+# Приводит установку в соответствие актуальной версии скрипта без повторной
+# скачки бинарника:
+#   - конфиг — создаётся только если отсутствует (пользовательский не затирается);
+#   - systemd-юнит — сравнивается с новым, при расхождении перезаписывается.
+# Если юнит изменился (или force_restart=1) — daemon-reload и рестарт/запуск сервиса.
+sync_installation() {
+    local force_restart="${1:-0}" changed=0 tmp
+    install_config
+
+    tmp="$(mktemp)"
+    unit_content > "${tmp}"
+    if [[ ! -f "${UNIT_PATH}" ]] || ! cmp -s "${tmp}" "${UNIT_PATH}"; then
+        mv "${tmp}" "${UNIT_PATH}" && chmod 0644 "${UNIT_PATH}"
+        changed=1
+        info "Systemd-юнит обновлён: ${UNIT_PATH}"
+    else
+        rm -f "${tmp}"
+        note "Systemd-юнит уже соответствует актуальной версии скрипта"
+    fi
+
+    if [[ "${changed}" -eq 1 || "${force_restart}" -eq 1 ]]; then
+        systemctl daemon-reload
+        ensure_running
+    fi
 }
 
 # ---------------------------------------------------------------- apt-пакет (оригинальный sing-box)
@@ -305,16 +337,14 @@ do_install() {
     tag="$(get_latest_tag)"
     arch="$(detect_arch)"
 
-    # повторный запуск: если стоит новая версия — обновляем, иначе выходим
+    # повторный запуск: если стоит новая версия — починка/синхронизация, иначе выходим
     if [[ -x "${BIN_PATH}" && -f "${VERSION_FILE}" ]]; then
         installed="$(<"${VERSION_FILE}")"
         if version_ge "${installed}" "${tag}"; then
-            info "Уже установлена последняя версия: ${installed}. Обновлять нечего."
-            if [[ ! -f "${UNIT_PATH}" ]]; then
-                note "Systemd-юнит не найден — доустанавливаю его и конфиг..."
-                install_config
-                install_unit
-            fi
+            info "Уже установлена последняя версия: ${installed}."
+            note "Проверяю установку на соответствие актуальной версии скрипта (юнит, конфиг)..."
+            sync_installation
+            reset_hash
             return 0
         fi
         note "Доступна новая версия: ${installed} -> ${tag}. Обновляю..."
@@ -344,7 +374,10 @@ do_update() {
     if [[ -f "${VERSION_FILE}" ]]; then
         cur="$(<"${VERSION_FILE}")"
         if version_ge "${cur}" "${tag}"; then
-            info "Уже установлена последняя версия: ${cur}. Обновлять нечего."
+            info "Уже установлена последняя версия: ${cur}."
+            note "Проверяю установку на соответствие актуальной версии скрипта (юнит, конфиг)..."
+            sync_installation
+            reset_hash
             return 0
         fi
         note "Доступна новая версия: ${cur} -> ${tag}"
@@ -355,11 +388,8 @@ do_update() {
     arch="$(detect_arch)"
     install_binary "${tag}" "${arch}"
     save_version "${tag}"
-    systemctl daemon-reload
-    if systemctl is-active --quiet sing-box.service; then
-        info "Перезапускаю сервис..."
-        systemctl restart sing-box.service
-    fi
+    sync_installation 1   # конфиг + юнит; сервис перезапустится (бинарник новый)
+    reset_hash
 }
 
 # ---------------------------------------------------------------- удаление
