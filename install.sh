@@ -232,7 +232,7 @@ EOF
 install_unit() {
     cat > "${UNIT_PATH}" <<EOF
 [Unit]
-Description=sing-box extended (SFA) — universal proxy platform
+Description=sing-box extended (SFA) - universal proxy platform
 Documentation=https://github.com/${REPO}
 After=network-online.target nss-lookup.target
 Wants=network-online.target
@@ -243,7 +243,7 @@ ExecStart=${BIN_PATH} run -c ${CONFIG_FILE}
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=1048576
-# Права, необходимые для TUN/BPF (tun-инбаунд, bpf routing)
+# Capabilities required for TUN/BPF (tun inbound, bpf routing)
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_TIME
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
 NoNewPrivileges=true
